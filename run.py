@@ -3,7 +3,7 @@ from snake_env import SnakeEnv
 import ray
 import imageio
 from ray.tune.registry import register_env
-from ray.rllib.agents.ppo import PPOTrainer, DEFAULT_CONFIG
+from ray.rllib.algorithms.ppo import PPOConfig
 from ray.tune.logger import pretty_print
 import matplotlib.pyplot as plt
 import mediapy as media
@@ -30,9 +30,8 @@ with open("SnakeConfig.yaml", 'r') as stream:
 print("Config loaded")
 fps = 20
 
+trainer = PPOConfig().from_dict(config).build()
 
-
-trainer = PPOTrainer(config=config, env="snake-v0")
 
 snakie = SnakeEnv({"render_mode": "rgb_array"})
 

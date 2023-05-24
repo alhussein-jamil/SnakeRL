@@ -13,11 +13,11 @@ class Snake:
 
 
     def move(self):
+        self.body.append((self.body[-1][0] + self.direction[0] * self.block_size, self.body[-1][1] + self.direction[1] * self.block_size))
         if self.grow:
             self.grow = False
         else:
             self.body.pop(0)
-        self.body.append((self.body[-1][0] + self.direction[0] * self.block_size, self.body[-1][1] + self.direction[1] * self.block_size))
         self.head = self.body[-1]
 
 

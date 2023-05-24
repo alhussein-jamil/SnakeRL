@@ -21,6 +21,7 @@ class SnakeEnv(gym.Env):
         self.snake = Snake(self.screen_width, self.screen_height, self.block_size)
         self.apple = self.generate_apple()
         self.latest_distance = 1
+        self.max_steps = config.get('max_steps', self.screen_width * self.screen_height // self.block_size**2)
         if(config.get('render_mode',"rgb_array") == "human"):
             pygame.init()
             self.screen =  pygame.display.set_mode((self.screen_width, self.screen_height))
@@ -28,51 +29,38 @@ class SnakeEnv(gym.Env):
         self.observation_space = Box(low = 0, high = 1, shape = (self.screen_height//self.block_size, self.screen_width//self.block_size, 3,), dtype = np.float32)
         self.action_space = Box(low = 0, high = 1, shape = (4,), dtype = np.float32)
         self.hunger = 0
-
+        self.steps = 0
         self.reset()
-    def normalized_distance (self, a, b):
-        return np.sqrt(((a[0] - b[0])/self.block_size)**2 + ((a[1] - b[1])/self.block_size)**2)/((self.screen_width/self.block_size+self.screen_height/self.block_size)/2.0)
+
+    def normalized_distance(self, a, b):    
+        return np.linalg.norm(np.array(a) - np.array(b)) / np.sqrt(self.screen_width**2 + self.screen_height**2)
     
+
     def compute_reward(self, action):
-        self.reward = 0
-        #if eaten apple add 10 to the reward
-        if self.snake.head == self.apple.position:
-            self.reward += 5
-        #if snake collides with wall or body subtract 10 from the reward
-        if self.snake.head[0] < 0 or self.snake.head[0] >= self.screen_width or self.snake.head[1] < 0 or self.snake.head[1] >= self.screen_height:
-            self.reward -= 2
+        rewards = {
+            "apple": 1 if self.snake.head == self.apple.position else 0,
+            "death": -1 if self.snake.head in self.snake.body[:-1] or not self.in_grid_bounds(self.snake.head) else 0,
+            "getting closer": 1 if self.latest_distance > self.normalized_distance(self.snake.head, self.apple.position) else -2,
 
-        # if self.snake.head in self.snake.body[1:]:
-        #     self.reward -= 2
-        normal_dis = self.normalized_distance(self.snake.head, self.apple.position)
-        exp_dis = np.exp(-3*normal_dis)
-        # #add some reward proportional to the distance from the apple
-        if(normal_dis < self.latest_distance):
-            self.reward += exp_dis
-        else:
-             self.reward -= 2*exp_dis
+        }
 
-        self.latest_distance = normal_dis
-        print(exp_dis)
-        # #print(np.exp(-np.sqrt(((self.snake.head[0] - self.apple.position[0])/self.block_size)**2 + ((self.snake.head[1] - self.apple.position[1])/self.block_size)**2)/((self.screen_width/self.block_size+self.screen_height/self.block_size)/2.0)))
-        #  #*exp_dis
-        # block_distance = np.abs(self.snake.head[0]-self.apple.position[0])/self.block_size + np.abs(self.snake.head[1]-self.apple.position[1])/self.block_size
-        # penalty_hunger =1-self.hunger / block_distance#np.sqrt(self.screen_height//self.block_size * self.screen_width//self.block_size) 
-        # self.reward+=  penalty_hunger
-        
-        self.reward = np.clip(self.reward, 0.01, np.inf)
-        return self.reward
+        self.latest_distance = self.normalized_distance(self.snake.head, self.apple.position)
+        self.reward =( rewards["getting closer"] + rewards["apple"] + rewards["death"] ) / len(rewards)
+        self.reward = np.clip(self.reward,0,1)
 
 
     def reset(self, iteration=0, seed=None, options=None):
         # This function resets the game state and returns the initial observation
         # of the game state.
-
+        np.random.seed(seed)    
         # Initialize the snake and apple
         self.snake = Snake(self.screen_width, self.screen_height, self.block_size)
-        self.snake.head = (self.screen_width // 2, self.screen_height // 2)
-        self.snake.body = [(self.screen_width // 2, self.screen_height // 2)]
-        self.snake.direction = (1, 0)
+        start = (np.random.randint(1,self.screen_width//self.block_size - 1 ) , np.random.randint(1,self.screen_height//self.block_size - 1 ))
+
+        self.snake.head = (start[0] * self.block_size, start[1] * self.block_size)
+        self.snake.body = [self.snake.head]
+        self.latest_distance = 1 
+        self.snake.direction = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
         self.snake.grow = False
         self.apple = self.generate_apple()
         self.score = 0
@@ -103,7 +91,10 @@ class SnakeEnv(gym.Env):
             self.done = True
 
         # Check if snake collides with body
-        if self.snake.head in self.snake.body[1:]:
+        if self.snake.head in self.snake.body[:-1]:
+            self.done = True    
+
+        if self.steps > self.max_steps:
             self.done = True
 
         return self._get_obs(),self.reward, self.done, False, {}
@@ -148,16 +139,10 @@ class SnakeEnv(gym.Env):
             # Wait 100 milliseconds
             pygame.time.delay(100)
 
-
     def in_grid_bounds(self, pos):
         return 0 <= pos[0] < self.screen_width and 0 <= pos[1] < self.screen_height
+    
     def _get_obs(self):
-        # obs = np.zeros(4)
-        # obs[0] = (self.snake.head[0] - self.apple.position[0])/self.block_size
-        # obs[1] = (self.snake.head[1] - self.apple.position[1])/self.block_size
-        # obs[2] = self.snake.direction[0]
-        # obs[3] = self.snake.direction[1]
-        # return obs 
         obs = np.zeros((self.screen_height//self.block_size, self.screen_width//self.block_size, 3), dtype=np.uint8)
         obs[self.apple.position[1]//self.block_size, self.apple.position[0]//self.block_size, 0] = 1
         

@@ -2,7 +2,7 @@
 
 # Environment
 env: snake-v0
-num_workers: 20
+num_workers: 16
 num_gpus: 1 
 num_cpus_per_worker: 1
 disable_env_checking: true
